@@ -3,12 +3,16 @@
 
 import argparse
 import json
+import os
 import time
 
 import torch
 
 from chronicle_runtime.runtime.engine import batch_generate
+from chronicle_runtime.runtime.model import load_model
 from chronicle_runtime.bench.prompts import make_prompts
+
+WARMUP_RUNS = int(os.environ.get("BENCH_WARMUP", "2"))
 
 
 def main() -> None:
@@ -24,8 +28,21 @@ def main() -> None:
     prompts = make_prompts(args.num_prompts, args.fixed_length, args.varied)
     max_new_tokens_list = [args.max_new_tokens] * len(prompts)
 
+    tokenizer, model = load_model()
+    device = str(next(model.parameters()).device)
+    model_name = os.environ.get("MODEL_NAME", "gpt2")
+
+    prompt_token_lengths = [len(tokenizer.encode(p)) for p in prompts]
+    prompt_token_length = (
+        args.fixed_length if not args.varied else {"varied": prompt_token_lengths}
+    )
+
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
+
+    # Warmup
+    for _ in range(WARMUP_RUNS):
+        batch_generate([prompts[0]], [args.max_new_tokens], seed=42)
 
     batch_size = args.batch_size or len(prompts)
     latencies_ms: list[float] = []
@@ -56,10 +73,11 @@ def main() -> None:
 
     result = {
         "backend": "chronicle",
-        "num_prompts": len(prompts),
+        "model_name": model_name,
+        "device": device,
+        "prompt_token_length": prompt_token_length,
         "max_new_tokens": args.max_new_tokens,
-        "fixed_length": args.fixed_length,
-        "varied": args.varied,
+        "num_prompts": len(prompts),
         "total_tokens": total_tokens,
         "total_s": total_s,
         "tokens_per_sec": tokens_per_sec,

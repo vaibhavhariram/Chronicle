@@ -62,6 +62,7 @@ make test
 | `MAX_BATCH` | 8 | Max requests per batch |
 | `MAX_QUEUE_WAIT_MS` | 5000 | Max queue wait before flushing (fairness) |
 | `COMPILE` | off | Set to `1` to enable `torch.compile` on the model |
+| `BENCH_WARMUP` | 2 | Warmup runs before timed benchmark (excluded from results) |
 
 ## Performance optimizations
 
@@ -115,24 +116,61 @@ Options:
 
 ```
 === BASELINE ===
-  num_prompts:    20
-  total_tokens:   640
-  total_s:        12.34
-  tokens/sec:     51.86
-  latency p50:    580.12 ms
-  latency p95:    620.45 ms
-  batch_sizes:    min=1, max=1, avg=1.0
+  model_name:           gpt2
+  device:               cpu
+  prompt_token_length:  64
+  max_new_tokens:       32
+  num_prompts:          20
+  tokens/sec:           51.86
+  latency p50 (ms):     580.12
+  latency p95 (ms):     620.45
+  latency p99 (ms):     635.00
+  batch_size_dist:      {1: 20}
 
 === CHRONICLE ===
-  num_prompts:    20
-  total_tokens:   640
-  total_s:        2.15
-  tokens/sec:     297.67
-  latency p50:    107.50 ms
-  latency p95:    107.50 ms
-  batch_sizes:    min=20, max=20, avg=20.0
-  gpu_mem_mb:     1245.32
+  model_name:           gpt2
+  device:               cuda:0
+  prompt_token_length:  64
+  max_new_tokens:       32
+  num_prompts:          20
+  tokens/sec:           297.67
+  latency p50 (ms):     107.50
+  latency p95 (ms):     107.50
+  latency p99 (ms):     107.50
+  batch_size_dist:      {20: 1}
+  gpu_mem_mb:           1245.32
 ```
+
+Results are saved to `.bench/results.json` with timestamp and environment details.
+
+## Metrics methodology
+
+Benchmark results are designed to be **resume-defensible and hard to dispute**. Each run records:
+
+- **Model and device**: `model_name`, `device` (from `MODEL_NAME`, `DEVICE` env)
+- **Input config**: `prompt_token_length` (fixed or varied), `max_new_tokens`, `num_prompts`
+- **Throughput**: `tokens/sec` = total generated tokens / wall-clock time
+- **Latency**: p50/p95/p99 (ms) from per-request end-to-end times
+- **Batch distribution**: `batch_size_dist` histogram
+- **GPU memory**: peak `gpu_mem_mb` when CUDA available
+
+**Baseline vs Chronicle comparison**:
+- Same model, same prompts, same `max_new_tokens`
+- Baseline: sequential `model.generate()` per request (batch_size=1)
+- Chronicle: batched `engine.batch_generate()` with KV-cache reuse
+
+**Warmup**:
+- `BENCH_WARMUP` env (default 2) warmup runs before timed measurement
+- Excludes cold-start (model load, JIT compile) from results
+
+**Latency measurement**:
+- Per-request: wall-clock from start to completion
+- Baseline: one request per call
+- Chronicle: amortized batch time per request (batch_time / batch_size)
+
+**Environment**:
+- `results.json` includes `timestamp`, `environment` (python version, platform)
+- Reproducible: set `MODEL_NAME`, `DEVICE`, `BENCH_WARMUP` before running
 
 ## Load test
 
