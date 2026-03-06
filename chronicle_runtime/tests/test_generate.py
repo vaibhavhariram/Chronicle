@@ -7,8 +7,8 @@ from chronicle_runtime.server.main import app
 client = TestClient(app)
 
 
-def test_generate_returns_text_and_latency():
-    """POST /generate returns non-empty text and latency_ms."""
+def test_generate_returns_text_and_metrics():
+    """POST /generate returns non-empty text and metrics fields."""
     resp = client.post(
         "/generate",
         json={"prompt": "Hello world", "max_new_tokens": 16},
@@ -18,5 +18,9 @@ def test_generate_returns_text_and_latency():
     assert "text" in data
     assert len(data["text"]) > 0
     assert "latency_ms" in data
-    assert isinstance(data["latency_ms"], (int, float))
     assert data["latency_ms"] >= 0
+    assert "queue_wait_ms" in data
+    assert "compute_ms" in data
+    assert "total_latency_ms" in data
+    assert "batch_size" in data
+    assert "tokens_generated" in data

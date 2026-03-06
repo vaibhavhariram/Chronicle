@@ -7,9 +7,13 @@ import pytest
 from chronicle_runtime.runtime.scheduler import Scheduler
 
 
-def _stub_batch_inference(prompts: list[str], max_new_tokens_list: list[int]) -> list[str]:
+def _stub_batch_inference(
+    prompts: list[str], max_new_tokens_list: list[int]
+) -> tuple[list[str], list[int], float, float]:
     """Stub batch inference for fast tests."""
-    return [f"{p} [stub]" for p in prompts]
+    texts = [f"{p} [stub]" for p in prompts]
+    tokens = [1] * len(prompts)
+    return texts, tokens, 0.0, 0.0
 
 
 @pytest.mark.asyncio
@@ -30,7 +34,7 @@ async def test_scheduler_batches_concurrent_requests():
             scheduler.enqueue("b", 10),
             scheduler.enqueue("c", 10),
         )
-        assert results == ["a [stub]", "b [stub]", "c [stub]"]
+        assert [r["text"] for r in results] == ["a [stub]", "b [stub]", "c [stub]"]
         # At least one batch should have 2+ requests
         assert any(sz >= 2 for sz in batch_sizes), f"expected batch size >= 2, got {batch_sizes}"
     finally:

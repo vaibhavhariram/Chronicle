@@ -1,6 +1,5 @@
 """FastAPI server for Chronicle runtime inference."""
 
-import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -33,6 +32,11 @@ class GenerateResponse(BaseModel):
 
     text: str
     latency_ms: float
+    queue_wait_ms: float
+    compute_ms: float
+    total_latency_ms: float
+    batch_size: int
+    tokens_generated: int
 
 
 @app.get("/healthz")
@@ -44,8 +48,15 @@ def healthz() -> dict:
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest) -> GenerateResponse:
     """Generate text from prompt via micro-batch scheduler."""
-    start = time.perf_counter()
-    scheduler = get_scheduler()
-    text = await scheduler.enqueue(prompt=req.prompt, max_new_tokens=req.max_new_tokens)
-    latency_ms = (time.perf_counter() - start) * 1000
-    return GenerateResponse(text=text, latency_ms=latency_ms)
+    result = await get_scheduler().enqueue(
+        prompt=req.prompt, max_new_tokens=req.max_new_tokens
+    )
+    return GenerateResponse(
+        text=result["text"],
+        latency_ms=result["total_latency_ms"],
+        queue_wait_ms=result["queue_wait_ms"],
+        compute_ms=result["compute_ms"],
+        total_latency_ms=result["total_latency_ms"],
+        batch_size=result["batch_size"],
+        tokens_generated=result["tokens_generated"],
+    )

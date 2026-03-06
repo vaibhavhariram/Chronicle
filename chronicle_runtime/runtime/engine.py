@@ -1,5 +1,6 @@
 """Batched inference engine with KV-cache reuse."""
 
+import time
 from typing import Optional
 
 import torch
@@ -18,17 +19,14 @@ def batch_generate(
     prompts: list[str],
     max_new_tokens_list: list[int],
     seed: Optional[int] = 42,
-) -> list[str]:
+) -> tuple[list[str], list[int], float, float]:
     """
     Batched greedy decoding with KV-cache reuse.
 
-    - Tokenize prompts as batch with left padding
-    - Prefill: one forward pass with use_cache=True
-    - Decode token-by-token up to max(max_new_tokens)
-    - Per-request limits and EOS handling
+    Returns: (texts, tokens_per_request, prefill_ms, decode_ms)
     """
     if not prompts:
-        return []
+        return [], [], 0.0, 0.0
     if len(prompts) != len(max_new_tokens_list):
         raise ValueError("prompts and max_new_tokens_list must have same length")
 
@@ -66,12 +64,14 @@ def batch_generate(
     max_steps = max(max_new_tokens_list)
 
     # Prefill
+    t_prefill = time.perf_counter()
     with torch.no_grad():
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             use_cache=True,
         )
+    prefill_ms = (time.perf_counter() - t_prefill) * 1000
     logits = outputs.logits
     past_key_values = outputs.past_key_values
 
@@ -88,6 +88,7 @@ def batch_generate(
             finished[i] = True
 
     # Decode loop
+    t_decode_start = time.perf_counter()
     for _ in range(max_steps - 1):
         if all(finished):
             break
@@ -121,6 +122,8 @@ def batch_generate(
             if finished[i]:
                 next_tokens[i] = pad_token_id
 
+    decode_ms = (time.perf_counter() - t_decode_start) * 1000
+
     # Decode: prompt tokens (non-pad) + generated
     texts = []
     for i in range(batch_size):
@@ -130,4 +133,5 @@ def batch_generate(
         text = tokenizer.decode(full_ids, skip_special_tokens=True)
         texts.append(text)
 
-    return texts
+    tokens_per_request = [len(ids) for ids in generated_ids]
+    return texts, tokens_per_request, prefill_ms, decode_ms
