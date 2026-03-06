@@ -1,12 +1,24 @@
 """FastAPI server for Chronicle runtime inference."""
 
 import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from chronicle_runtime.runtime.model import generate as model_generate
+from chronicle_runtime.runtime.scheduler import get_scheduler
 
-app = FastAPI(title="Chronicle Runtime", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start scheduler on startup, stop on shutdown."""
+    scheduler = get_scheduler()
+    scheduler.start()
+    yield
+    await scheduler.stop()
+
+
+app = FastAPI(title="Chronicle Runtime", version="0.1.0", lifespan=lifespan)
 
 
 class GenerateRequest(BaseModel):
@@ -30,9 +42,10 @@ def healthz() -> dict:
 
 
 @app.post("/generate", response_model=GenerateResponse)
-def generate(req: GenerateRequest) -> GenerateResponse:
-    """Generate text from prompt using Hugging Face model."""
+async def generate(req: GenerateRequest) -> GenerateResponse:
+    """Generate text from prompt via micro-batch scheduler."""
     start = time.perf_counter()
-    text = model_generate(prompt=req.prompt, max_new_tokens=req.max_new_tokens, do_sample=False)
+    scheduler = get_scheduler()
+    text = await scheduler.enqueue(prompt=req.prompt, max_new_tokens=req.max_new_tokens)
     latency_ms = (time.perf_counter() - start) * 1000
     return GenerateResponse(text=text, latency_ms=latency_ms)

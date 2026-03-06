@@ -9,6 +9,7 @@ dependencies = [
     "torch>=2.0.0",
     "transformers>=4.40.0",
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "httpx>=0.27.0",
 ]
 
@@ -28,3 +29,4 @@ packages = ["chronicle_runtime"]
 testpaths = ["chronicle_runtime/tests"]
 pythonpath = ["."]
 addopts = "-v"
+asyncio_mode = "auto"
