@@ -4,6 +4,8 @@ import time
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from chronicle_runtime.runtime.model import generate as model_generate
+
 app = FastAPI(title="Chronicle Runtime", version="0.1.0")
 
 
@@ -21,11 +23,6 @@ class GenerateResponse(BaseModel):
     latency_ms: float
 
 
-def _generate_stub(prompt: str, max_new_tokens: int) -> str:
-    """Placeholder generate function. Returns prompt + ' [stub]'."""
-    return f"{prompt} [stub]"
-
-
 @app.get("/healthz")
 def healthz() -> dict:
     """Health check endpoint."""
@@ -34,8 +31,8 @@ def healthz() -> dict:
 
 @app.post("/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest) -> GenerateResponse:
-    """Generate text from prompt. Currently a stub implementation."""
+    """Generate text from prompt using Hugging Face model."""
     start = time.perf_counter()
-    text = _generate_stub(req.prompt, req.max_new_tokens)
+    text = model_generate(prompt=req.prompt, max_new_tokens=req.max_new_tokens, do_sample=False)
     latency_ms = (time.perf_counter() - start) * 1000
     return GenerateResponse(text=text, latency_ms=latency_ms)

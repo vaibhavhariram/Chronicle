@@ -35,6 +35,14 @@ make test
 # or: pytest
 ```
 
+## Configuration (env vars)
+
+| Variable   | Default | Description                          |
+|------------|---------|--------------------------------------|
+| `MODEL_NAME` | `gpt2` | Hugging Face model ID                |
+| `DEVICE`   | auto    | `cuda` or `cpu` (auto = cuda if available) |
+| `HF_HUB_CACHE` | —    | Override Hugging Face cache directory |
+
 ## API
 
 | Method | Endpoint   | Description                          |
@@ -48,7 +56,7 @@ make test
 curl -X POST http://localhost:8000/generate \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello", "max_new_tokens": 64}'
-# {"text":"Hello [stub]","latency_ms":0.05}
+# {"text":"Hello, world! ...","latency_ms":42.3}
 ```
 
 ## Structure
