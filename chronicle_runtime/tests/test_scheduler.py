@@ -7,9 +7,9 @@ import pytest
 from chronicle_runtime.runtime.scheduler import Scheduler
 
 
-def _stub_inference(prompt: str, max_new_tokens: int) -> str:
-    """Stub inference for fast tests."""
-    return f"{prompt} [stub]"
+def _stub_batch_inference(prompts: list[str], max_new_tokens_list: list[int]) -> list[str]:
+    """Stub batch inference for fast tests."""
+    return [f"{p} [stub]" for p in prompts]
 
 
 @pytest.mark.asyncio
@@ -20,7 +20,7 @@ async def test_scheduler_batches_concurrent_requests():
         batch_window_ms=100,
         max_batch=8,
         batch_sizes=batch_sizes,
-        inference_fn=_stub_inference,
+        batch_inference_fn=_stub_batch_inference,
     )
     scheduler.start()
     try:
