@@ -5,6 +5,8 @@ import argparse
 import json
 import time
 
+import torch
+
 from chronicle_runtime.runtime.engine import batch_generate
 from chronicle_runtime.bench.prompts import make_prompts
 
@@ -21,6 +23,9 @@ def main() -> None:
 
     prompts = make_prompts(args.num_prompts, args.fixed_length, args.varied)
     max_new_tokens_list = [args.max_new_tokens] * len(prompts)
+
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
 
     batch_size = args.batch_size or len(prompts)
     latencies_ms: list[float] = []
@@ -44,6 +49,11 @@ def main() -> None:
     total_tokens = sum(tokens_per_request)
     tokens_per_sec = total_tokens / total_s if total_s > 0 else 0
 
+    gpu_mem_mb = None
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        gpu_mem_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+
     result = {
         "backend": "chronicle",
         "num_prompts": len(prompts),
@@ -56,6 +66,8 @@ def main() -> None:
         "latencies_ms": latencies_ms,
         "batch_sizes": batch_sizes,
     }
+    if gpu_mem_mb is not None:
+        result["gpu_mem_mb"] = round(gpu_mem_mb, 2)
 
     out = json.dumps(result, indent=2)
     if args.output == "-":

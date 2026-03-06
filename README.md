@@ -45,6 +45,18 @@ make test
 | `BATCH_WINDOW_MS` | 50 | Max ms to wait for more requests before flushing |
 | `MAX_BATCH` | 8 | Max requests per batch |
 | `MAX_QUEUE_WAIT_MS` | 5000 | Max queue wait before flushing (fairness) |
+| `COMPILE` | off | Set to `1` to enable `torch.compile` on the model |
+
+## Performance optimizations
+
+| Optimization | Status | Why |
+|--------------|--------|-----|
+| `torch.inference_mode()` | Always on | Faster than `no_grad()`; disables autograd and view tracking for inference |
+| `model.eval()` | Always on | Disables dropout and batch norm training behavior |
+| Decode input buffer reuse | Always on | Reuses `[B, 1]` tensor across decode steps to avoid per-step allocation |
+| `torch.compile` | Optional (`COMPILE=1`) | JIT compilation can speed up repeated forward passes; off by default due to warmup cost |
+
+Benchmarks report `gpu_mem_mb` (peak GPU memory) when CUDA is available.
 
 ## API
 
@@ -103,6 +115,7 @@ Options:
   latency p50:    107.50 ms
   latency p95:    107.50 ms
   batch_sizes:    min=20, max=20, avg=20.0
+  gpu_mem_mb:     1245.32
 ```
 
 ## Load test

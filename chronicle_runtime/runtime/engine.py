@@ -65,7 +65,7 @@ def batch_generate(
 
     # Prefill
     t_prefill = time.perf_counter()
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -87,19 +87,17 @@ def batch_generate(
         ):
             finished[i] = True
 
-    # Decode loop
+    # Decode loop (reuse next_input buffer to avoid per-step allocation)
     t_decode_start = time.perf_counter()
+    next_input = next_tokens.unsqueeze(-1).clone()
     for _ in range(max_steps - 1):
         if all(finished):
             break
 
-        # Input: last token per sequence; use pad for finished
-        next_input = next_tokens.unsqueeze(-1).clone()
         for i in range(batch_size):
-            if finished[i]:
-                next_input[i] = pad_token_id
+            next_input[i, 0] = pad_token_id if finished[i] else next_tokens[i]
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = model(
                 input_ids=next_input,
                 past_key_values=past_key_values,
@@ -117,9 +115,7 @@ def batch_generate(
                     or len(generated_ids[i]) >= max_new_tokens_list[i]
                 ):
                     finished[i] = True
-
-        for i in range(batch_size):
-            if finished[i]:
+            else:
                 next_tokens[i] = pad_token_id
 
     decode_ms = (time.perf_counter() - t_decode_start) * 1000

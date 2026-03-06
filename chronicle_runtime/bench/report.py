@@ -23,6 +23,8 @@ def report(data: dict) -> str:
     lines.append(f"  total_tokens:   {data.get('total_tokens', 0)}")
     lines.append(f"  total_s:        {data.get('total_s', 0):.2f}")
     lines.append(f"  tokens/sec:     {data.get('tokens_per_sec', 0):.2f}")
+    if "gpu_mem_mb" in data:
+        lines.append(f"  gpu_mem_mb:     {data['gpu_mem_mb']:.2f}")
 
     latencies = data.get("latencies_ms", [])
     if latencies:

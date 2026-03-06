@@ -7,6 +7,8 @@ from typing import Optional
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+COMPILE = os.environ.get("COMPILE", "").lower() in ("1", "true", "yes")
+
 # Global cache
 _tokenizer: Optional[AutoTokenizer] = None
 _model: Optional[AutoModelForCausalLM] = None
@@ -59,6 +61,8 @@ def load_model(
     _model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
     _model.to(device)
     _model.eval()
+    if COMPILE:
+        _model = torch.compile(_model, mode="reduce-overhead")
 
     return _tokenizer, _model
 
@@ -73,7 +77,7 @@ def generate(
     device = next(model.parameters()).device
 
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
