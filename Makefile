@@ -1,4 +1,4 @@
-.PHONY: dev test install bench
+.PHONY: dev test install bench load
 
 install:
 	pip install -e .
@@ -20,3 +20,6 @@ bench-chronicle:
 
 bench-report:
 	python -m chronicle_runtime.bench.report .bench/baseline.json .bench/chronicle.json
+
+load:
+	python -m chronicle_runtime.load.run_load -c 4 -n 25 --max-new-tokens 32

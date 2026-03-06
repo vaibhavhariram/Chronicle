@@ -102,6 +102,22 @@ Options:
   batch_sizes:    min=20, max=20, avg=20.0
 ```
 
+## Load test
+
+HTTP load test against a running server (e.g. `make dev` in another terminal):
+
+```bash
+python -m chronicle_runtime.load.run_load -u http://localhost:8000/generate -c 4 -n 25 --max-new-tokens 32
+```
+
+Options:
+- `-u` / `--url` endpoint URL (default: http://localhost:8000/generate)
+- `-c` / `--concurrency` number of concurrent workers (default: 4)
+- `-n` / `--requests-per-worker` requests per worker (default: 10)
+- `--max-new-tokens` tokens to generate per request (default: 32)
+
+Reports throughput (req/s), error rate, and latency p50/p95/p99.
+
 ## Structure
 
 ```
