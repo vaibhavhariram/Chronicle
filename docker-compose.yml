@@ -1,0 +1,9 @@
+# Optional: run Chronicle server in Docker
+services:
+  chronicle:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEVICE=cpu
+      - MODEL_NAME=gpt2

@@ -1,7 +1,10 @@
-.PHONY: dev test install bench load
+.PHONY: dev test install bench load demo
 
 install:
 	pip install -e .
+
+demo:
+	./scripts/demo.sh
 
 dev:
 	uvicorn chronicle_runtime.server.main:app --reload

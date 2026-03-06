@@ -40,3 +40,19 @@ def test_batch_generate_respects_per_request_max_tokens():
     )
     assert len(texts) == 2
     assert tokens_per_req[0] <= tokens_per_req[1]
+
+
+def test_e2e_batch_generate_full_pipeline():
+    """End-to-end: batch_generate returns valid texts for multiple prompts."""
+    prompts = ["Hello world", "The capital of France is"]
+    max_new_tokens_list = [10, 10]
+    texts, tokens_per_req, prefill_ms, decode_ms = batch_generate(
+        prompts, max_new_tokens_list, seed=42
+    )
+    assert len(texts) == 2
+    assert len(tokens_per_req) == 2
+    for i, text in enumerate(texts):
+        assert len(text) > 0
+        assert tokens_per_req[i] > 0
+    assert prefill_ms >= 0
+    assert decode_ms >= 0

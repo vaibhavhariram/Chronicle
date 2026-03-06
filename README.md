@@ -2,6 +2,22 @@
 
 ML inference server for Chronicle. FastAPI + PyTorch + transformers.
 
+## Quick Demo
+
+Two commands to run the full demo (server + benchmark + load test):
+
+```bash
+pip install -e .
+make demo
+```
+
+Or with Docker:
+
+```bash
+docker compose up --build
+# In another terminal: python -m chronicle_runtime.load.run_load -c 2 -n 8
+```
+
 ## Requirements
 
 - Python 3.11+
