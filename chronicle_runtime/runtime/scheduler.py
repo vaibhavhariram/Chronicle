@@ -13,6 +13,7 @@ from chronicle_runtime.runtime.metrics import get_metrics
 
 BATCH_WINDOW_MS = int(os.environ.get("BATCH_WINDOW_MS", "50"))
 MAX_BATCH = int(os.environ.get("MAX_BATCH", "8"))
+MAX_QUEUE_WAIT_MS = int(os.environ.get("MAX_QUEUE_WAIT_MS", "5000"))
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class Scheduler:
         self,
         batch_window_ms: Optional[int] = None,
         max_batch: Optional[int] = None,
+        max_queue_wait_ms: Optional[int] = None,
         batch_sizes: Optional[list[int]] = None,
         batch_inference_fn: Optional[
             Callable[[list[str], list[int]], tuple[list[str], list[int], float, float]]
@@ -41,6 +43,7 @@ class Scheduler:
     ):
         self.batch_window_ms = batch_window_ms or BATCH_WINDOW_MS
         self.max_batch = max_batch or MAX_BATCH
+        self.max_queue_wait_ms = max_queue_wait_ms or MAX_QUEUE_WAIT_MS
         self._queue: asyncio.Queue[BatchRequest] = asyncio.Queue()
         self._batch_sizes: list[int] = batch_sizes if batch_sizes is not None else []
         self._batch_inference_fn = batch_inference_fn or engine_batch_generate
@@ -54,6 +57,8 @@ class Scheduler:
 
     async def _run_batch_inference(self, batch: list[BatchRequest]) -> None:
         """Run batched inference and resolve futures with metrics."""
+        # Sort by max_new_tokens to reduce tail effects (group similar requests)
+        batch = sorted(batch, key=lambda r: r.max_new_tokens)
         prompts = [r.prompt for r in batch]
         max_new_tokens_list = [r.max_new_tokens for r in batch]
         compute_start = time.perf_counter()
@@ -124,21 +129,28 @@ class Scheduler:
                 continue
             batch.append(first)
 
-            deadline = asyncio.get_event_loop().time() + (
-                self.batch_window_ms / 1000.0
-            )
-            while len(batch) < self.max_batch:
-                remaining = deadline - asyncio.get_event_loop().time()
-                if remaining <= 0:
-                    break
-                try:
-                    req = await asyncio.wait_for(
-                        self._queue.get(),
-                        timeout=remaining,
-                    )
-                    batch.append(req)
-                except asyncio.TimeoutError:
-                    break
+            # Flush immediately if oldest request already exceeded max queue wait
+            now = asyncio.get_event_loop().time()
+            if (now - batch[0].enqueue_time) * 1000 < self.max_queue_wait_ms:
+                deadline = now + (self.batch_window_ms / 1000.0)
+                while len(batch) < self.max_batch:
+                    now = asyncio.get_event_loop().time()
+                    oldest_wait_s = now - batch[0].enqueue_time
+                    remaining_until_flush = (self.max_queue_wait_ms / 1000.0) - oldest_wait_s
+                    if remaining_until_flush <= 0:
+                        break
+                    remaining_deadline = deadline - now
+                    timeout = min(remaining_deadline, remaining_until_flush)
+                    if timeout <= 0:
+                        break
+                    try:
+                        req = await asyncio.wait_for(
+                            self._queue.get(),
+                            timeout=timeout,
+                        )
+                        batch.append(req)
+                    except asyncio.TimeoutError:
+                        break
 
             self._batch_sizes.append(len(batch))
             await self._run_batch_inference(batch)

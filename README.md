@@ -42,6 +42,9 @@ make test
 | `MODEL_NAME` | `gpt2` | Hugging Face model ID                |
 | `DEVICE`   | auto    | `cuda` or `cpu` (auto = cuda if available) |
 | `HF_HUB_CACHE` | —    | Override Hugging Face cache directory |
+| `BATCH_WINDOW_MS` | 50 | Max ms to wait for more requests before flushing |
+| `MAX_BATCH` | 8 | Max requests per batch |
+| `MAX_QUEUE_WAIT_MS` | 5000 | Max queue wait before flushing (fairness) |
 
 ## API
 

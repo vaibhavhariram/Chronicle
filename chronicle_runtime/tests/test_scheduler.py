@@ -39,3 +39,23 @@ async def test_scheduler_batches_concurrent_requests():
         assert any(sz >= 2 for sz in batch_sizes), f"expected batch size >= 2, got {batch_sizes}"
     finally:
         await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_respects_max_queue_wait():
+    """Request is not stuck beyond MAX_QUEUE_WAIT_MS."""
+    max_queue_wait_ms = 80
+    batch_window_ms = 500
+    scheduler = Scheduler(
+        batch_window_ms=batch_window_ms,
+        max_batch=8,
+        max_queue_wait_ms=max_queue_wait_ms,
+        batch_inference_fn=_stub_batch_inference,
+    )
+    scheduler.start()
+    try:
+        result = await scheduler.enqueue("single", 5)
+        assert result["text"] == "single [stub]"
+        assert result["queue_wait_ms"] <= max_queue_wait_ms + 50
+    finally:
+        await scheduler.stop()

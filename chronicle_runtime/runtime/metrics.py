@@ -13,6 +13,7 @@ class Metrics:
     batch_sizes: list[int] = field(default_factory=list)
     decode_tokens_per_sec: list[float] = field(default_factory=list)
     request_latencies: list[dict] = field(default_factory=list)
+    queue_wait_ms: list[float] = field(default_factory=list)
 
     def record_batch(
         self,
@@ -29,6 +30,9 @@ class Metrics:
         self.batch_sizes.append(batch_size)
         self.decode_tokens_per_sec.append(tok_per_sec)
         self.request_latencies.extend(per_request)
+        for pr in per_request:
+            if "queue_wait_ms" in pr:
+                self.queue_wait_ms.append(pr["queue_wait_ms"])
 
 
 _metrics: Optional[Metrics] = None
