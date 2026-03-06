@@ -59,6 +59,49 @@ curl -X POST http://localhost:8000/generate \
 # {"text":"Hello, world! ...","latency_ms":42.3}
 ```
 
+## How to run benchmarks
+
+Compare Chronicle (batched KV-cache) vs HF baseline:
+
+```bash
+# Run baseline (sequential model.generate)
+python -m chronicle_runtime.bench.run_baseline -n 20 --max-new-tokens 32 -o baseline.json
+
+# Run Chronicle (batched engine.batch_generate)
+python -m chronicle_runtime.bench.run_chronicle -n 20 --max-new-tokens 32 -o chronicle.json
+
+# Print summary
+python -m chronicle_runtime.bench.report baseline.json chronicle.json
+```
+
+Options:
+- `-n` number of prompts (default: 10)
+- `--max-new-tokens` tokens to generate per prompt (default: 32)
+- `--fixed-length` prompt length in tokens (default: 64)
+- `--varied` use varied prompt lengths (16, 32, 64, 128)
+
+### Sample output
+
+```
+=== BASELINE ===
+  num_prompts:    20
+  total_tokens:   640
+  total_s:        12.34
+  tokens/sec:     51.86
+  latency p50:    580.12 ms
+  latency p95:    620.45 ms
+  batch_sizes:    min=1, max=1, avg=1.0
+
+=== CHRONICLE ===
+  num_prompts:    20
+  total_tokens:   640
+  total_s:        2.15
+  tokens/sec:     297.67
+  latency p50:    107.50 ms
+  latency p95:    107.50 ms
+  batch_sizes:    min=20, max=20, avg=20.0
+```
+
 ## Structure
 
 ```
