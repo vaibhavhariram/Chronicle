@@ -58,7 +58,17 @@ def load_model(
 
     cache_dir = _cache_dir()
     _tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-    _model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
+
+    # Mistral (and other models) may lack a pad token; left-padding requires one.
+    if _tokenizer.pad_token is None:
+        _tokenizer.pad_token = _tokenizer.eos_token
+        _tokenizer.pad_token_id = _tokenizer.eos_token_id
+    _tokenizer.padding_side = "left"
+
+    torch_dtype = torch.float16 if device != "cpu" else torch.float32
+    _model = AutoModelForCausalLM.from_pretrained(
+        model_name, cache_dir=cache_dir, torch_dtype=torch_dtype
+    )
     _model.to(device)
     _model.eval()
     if COMPILE:

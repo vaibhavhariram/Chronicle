@@ -12,12 +12,14 @@ from chronicle_runtime.runtime.model import generate as model_generate, load_mod
 from chronicle_runtime.bench.prompts import make_prompts
 
 WARMUP_RUNS = int(os.environ.get("BENCH_WARMUP", "2"))
+_DEFAULT_PROMPTS = int(os.environ.get("BENCH_PROMPTS", "50"))
+_DEFAULT_TOKENS = int(os.environ.get("BENCH_TOKENS", "128"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--num-prompts", type=int, default=10)
-    parser.add_argument("--max-new-tokens", type=int, default=32)
+    parser.add_argument("-n", "--num-prompts", type=int, default=_DEFAULT_PROMPTS)
+    parser.add_argument("--max-new-tokens", type=int, default=_DEFAULT_TOKENS)
     parser.add_argument("--fixed-length", type=int, default=64)
     parser.add_argument("--varied", action="store_true", help="Use varied prompt lengths")
     parser.add_argument("-o", "--output", default="-", help="Output JSON file (- for stdout)")

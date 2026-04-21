@@ -3,9 +3,13 @@
 
 import argparse
 import asyncio
+import json
+import os
 import time
 
 import httpx
+
+SWEEP_LEVELS = [10, 25, 50, 100, 250]
 
 
 def _percentile(sorted_arr: list[float], p: float) -> float:
@@ -71,6 +75,52 @@ async def run_load(
     return latencies, errors
 
 
+def _print_level_results(
+    url: str,
+    concurrency: int,
+    total_requests: int,
+    max_new_tokens: int,
+    elapsed_s: float,
+    latencies: list[float],
+    errors: list[Exception],
+) -> dict:
+    ok_latencies = [l for l in latencies if l >= 0]
+    error_count = len(errors)
+    ok_count = len(ok_latencies)
+    sorted_lat = sorted(ok_latencies) if ok_latencies else []
+
+    p50 = _percentile(sorted_lat, 50) if sorted_lat else 0.0
+    p95 = _percentile(sorted_lat, 95) if sorted_lat else 0.0
+    p99 = _percentile(sorted_lat, 99) if sorted_lat else 0.0
+    throughput = ok_count / elapsed_s if elapsed_s > 0 else 0.0
+
+    print("=== Load test results ===")
+    print(f"  url:              {url}")
+    print(f"  concurrency:      {concurrency}")
+    print(f"  total_requests:   {total_requests}")
+    print(f"  max_new_tokens:   {max_new_tokens}")
+    print(f"  elapsed_s:        {elapsed_s:.2f}")
+    print(f"  throughput:       {throughput:.2f} req/s")
+    print(f"  errors:           {error_count} ({100 * error_count / total_requests:.1f}%)")
+    if sorted_lat:
+        print(f"  latency p50:      {p50:.2f} ms")
+        print(f"  latency p95:      {p95:.2f} ms")
+        print(f"  latency p99:      {p99:.2f} ms")
+    else:
+        print("  (no successful requests)")
+
+    return {
+        "concurrency": concurrency,
+        "total_requests": total_requests,
+        "elapsed_s": round(elapsed_s, 3),
+        "throughput_req_s": round(throughput, 2),
+        "error_count": error_count,
+        "p50_ms": round(p50, 2),
+        "p95_ms": round(p95, 2),
+        "p99_ms": round(p99, 2),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -82,7 +132,55 @@ def main() -> None:
     parser.add_argument("-n", "--requests-per-worker", type=int, default=10)
     parser.add_argument("--max-new-tokens", type=int, default=32)
     parser.add_argument("--prompt", default="The quick brown fox jumps over the lazy dog.")
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help=f"Sweep concurrency levels {SWEEP_LEVELS} and save to .bench/load_sweep.json",
+    )
+    parser.add_argument(
+        "--sweep-requests", type=int, default=5,
+        help="Requests per worker per concurrency level during sweep (default: 5)",
+    )
     args = parser.parse_args()
+
+    if args.sweep:
+        sweep_results = []
+        for level in SWEEP_LEVELS:
+            print(f"\n--- concurrency={level} ---")
+            total_requests = level * args.sweep_requests
+            start = time.perf_counter()
+            latencies, errors = asyncio.run(
+                run_load(
+                    url=args.url,
+                    concurrency=level,
+                    requests_per_worker=args.sweep_requests,
+                    max_new_tokens=args.max_new_tokens,
+                    prompt=args.prompt,
+                )
+            )
+            elapsed_s = time.perf_counter() - start
+            row = _print_level_results(
+                args.url, level, total_requests, args.max_new_tokens,
+                elapsed_s, latencies, errors,
+            )
+            sweep_results.append(row)
+
+        print("\n=== Sweep Summary ===")
+        print(f"{'concurrency':>12}  {'p50 ms':>8}  {'p95 ms':>8}  {'p99 ms':>8}  {'req/s':>8}  {'errors':>6}")
+        for row in sweep_results:
+            print(
+                f"{row['concurrency']:>12}  {row['p50_ms']:>8.1f}  {row['p95_ms']:>8.1f}"
+                f"  {row['p99_ms']:>8.1f}  {row['throughput_req_s']:>8.2f}"
+                f"  {row['error_count']:>6}"
+            )
+
+        out_dir = os.path.join(os.getcwd(), ".bench")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, "load_sweep.json")
+        with open(out_path, "w") as f:
+            json.dump({"url": args.url, "max_new_tokens": args.max_new_tokens, "levels": sweep_results}, f, indent=2)
+        print(f"\nSaved to {out_path}")
+        return
 
     total_requests = args.concurrency * args.requests_per_worker
     start = time.perf_counter()
@@ -96,27 +194,10 @@ def main() -> None:
         )
     )
     elapsed_s = time.perf_counter() - start
-
-    ok_latencies = [l for l in latencies if l >= 0]
-    error_count = len(errors)
-    ok_count = len(ok_latencies)
-
-    print("=== Load test results ===")
-    print(f"  url:              {args.url}")
-    print(f"  concurrency:      {args.concurrency}")
-    print(f"  total_requests:   {total_requests}")
-    print(f"  max_new_tokens:  {args.max_new_tokens}")
-    print(f"  elapsed_s:        {elapsed_s:.2f}")
-    print(f"  throughput:       {ok_count / elapsed_s:.2f} req/s")
-    print(f"  errors:           {error_count} ({100 * error_count / total_requests:.1f}%)")
-
-    if ok_latencies:
-        sorted_lat = sorted(ok_latencies)
-        print(f"  latency p50:      {_percentile(sorted_lat, 50):.2f} ms")
-        print(f"  latency p95:      {_percentile(sorted_lat, 95):.2f} ms")
-        print(f"  latency p99:      {_percentile(sorted_lat, 99):.2f} ms")
-    else:
-        print("  (no successful requests)")
+    _print_level_results(
+        args.url, args.concurrency, total_requests, args.max_new_tokens,
+        elapsed_s, latencies, errors,
+    )
 
 
 if __name__ == "__main__":
